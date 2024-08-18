@@ -1,24 +1,12 @@
 {
-"keys": [ 3 ],
+"keys": [ 2, 5 ],
 "childrens": [ {
-"keys": [ 1 ],
-"childrens": [ {
-"keys": [ 0 ],
+"keys": [ 0, 1 ],
 "childrens": [ ]}
-,{
-"keys": [ 2 ],
+{
+"keys": [ 3, 4 ],
 "childrens": [ ]}
-]}
-,{
-"keys": [ 5, 7 ],
-"childrens": [ {
-"keys": [ 4 ],
+{
+"keys": [ 6, 7, 8, 9 ],
 "childrens": [ ]}
-,{
-"keys": [ 6 ],
-"childrens": [ ]}
-,{
-"keys": [ 8, 9 ],
-"childrens": [ ]}
-]}
 ]}

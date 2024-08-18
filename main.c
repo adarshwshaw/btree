@@ -37,6 +37,7 @@
 #define TRUE 1
 #define FALSE 0
 typedef unsigned int uint;
+#define NOT_IMP assert(FALSE && "NOT IMPLEMENTED");
 
 typedef struct {
     uint itemSize;
@@ -71,6 +72,17 @@ typedef struct BTree {
         memmove(dst, src, bytes);                                              \
         (arr)[(idx)] = (data);                                                 \
         ARR_LEN((arr)) += 1;                                                   \
+    } while (0)
+
+#define ARRAY_REMOVE(arr, idx)                                                 \
+    do {                                                                       \
+        assert(ARR_LEN((arr)) > idx && "Error: underflow");                    \
+        size_t itemSize = ARR_HDR((arr)).itemSize;                             \
+        size_t bytes = itemSize * (ARR_LEN((arr)) - (idx) + 1);                \
+        char *src = (char *)((arr) + idx + 1);                                 \
+        char *dst = src - itemSize;                                            \
+        memmove(dst, src, bytes);                                              \
+        ARR_LEN((arr)) -= 1;                                                   \
     } while (0)
 
 void *Array_init(uint itemSize, uint cap) {
@@ -170,6 +182,107 @@ void BTree_insert(BTree *tree, int data) {
     }
 }
 
+void Node_deleteFromLeaf(Node *node, int idx) { ARRAY_REMOVE(node->data, idx); }
+
+void Node_deleteFromNonLeaf(Node *node, int idx, int degree) {
+    NOT_IMP
+    //     if (ARR_LEN(node->childrens[idx]->data) >= degree){
+    // 	Node* cur = node->childrens[idx];
+    // 	while (!cur->isleaf){
+    // 	    cur= cur->childrens[ARR_LEN(cur->data)];
+    // 	}
+    // 	node->data[idx]=cur->data[ARR_LEN(cur->data)-1];
+    // 	Node_delete(node->childrens[idx],node->data[idx]);
+    //     }else if (ARR_LEN(node->childrens[idx+1]->data) >= degree){
+    // 	Node* cur = node->childrens[idx+1];
+    // 	while (!cur->isleaf){
+    // 	    cur= cur->childrens[0];
+    // 	}
+    // 	node->data[idx]=cur->data[0];
+    // 	Node_delete(node->childrens[idx+1],node->data[idx]);
+    //     }else{
+    // 	assert(FALSE && "Merge Non implemented"
+    //     }
+}
+void Node_merge(Node *node, int idx, size_t degree) { NOT_IMP }
+void Node_fill(Node *node, int idx, size_t degree) {
+    // check previous or later sibling if one of them has more than degree the
+    // pull one from there
+    if (idx != 0 && ARR_LEN(node->childrens[idx - 1]->data) >= degree) {
+        Node *child = node->childrens[idx];
+        Node *sibling = node->childrens[idx - 1];
+
+        ARRAY_INSERT(child->data, 0, node->data[idx - 1]);
+        if (!child->isleaf) {
+            ARRAY_INSERT(child->childrens, 0,
+                         sibling->childrens[ARR_LEN(sibling->childrens) - 1]);
+        }
+        node->data[idx - 1] = sibling->data[ARR_LEN(sibling->data) - 1];
+        ARRAY_REMOVE(sibling->data, ARR_LEN(sibling->data) - 1);
+        ARRAY_REMOVE(sibling->childrens, ARR_LEN(sibling->childrens) - 1);
+
+    }
+
+    else if (idx != ARR_LEN(node->data) &&
+             ARR_LEN(node->childrens[idx + 1]->data) >= degree) {
+        Node *child = node->childrens[idx];
+        Node *sibling = node->childrens[idx + 1];
+
+        ARRAY_INSERT(child->data, ARR_LEN(child->data), node->data[idx]);
+        if (!child->isleaf) {
+            ARRAY_INSERT(child->childrens, ARR_LEN(child->childrens),
+                         sibling->childrens[0]);
+            ARRAY_REMOVE(sibling->childrens, 0);
+        }
+        node->data[idx] = sibling->data[0];
+        ARRAY_REMOVE(sibling->data, 0);
+
+    } else {
+        if (idx != ARR_LEN(node->data)) {
+            Node_merge(node, idx, degree);
+        } else {
+            Node_merge(node, idx - 1, degree);
+        }
+    }
+}
+
+void Node_delete(Node *node, int data, size_t degree) {
+    int idx = 0;
+    while (idx < ARR_LEN(node->data) && node->data[idx] < data) {
+        idx++;
+    }
+    printf("to delete idx=%d\n", idx);
+    if (node->data[idx] == data) {
+        if (node->isleaf) {
+            Node_deleteFromLeaf(node, idx);
+        } else {
+            Node_deleteFromNonLeaf(node, idx, degree);
+        }
+    } else {
+
+        if (node->isleaf) {
+            printf("Error: key not found!");
+            return;
+        }
+        _Bool flag = idx == ARR_LEN(node->data);
+        if (ARR_LEN(node->childrens[idx]->data) < degree) {
+            Node_fill(node, idx, degree);
+        }
+
+        if (flag && idx > ARR_LEN(node->data)) {
+            Node_delete(node->childrens[idx - 1], data, degree);
+        } else {
+            Node_delete(node->childrens[idx], data, degree);
+        }
+    }
+}
+//
+
+void BTree_delete(BTree *tree, int data) {
+    printf("starting delete process for %d\n", data);
+    Node_delete(tree->root, data, tree->degree);
+}
+
 void Node_dump(Node *node, int lvl) {
     printf("level %d:%d %d:", lvl, ARR_LEN(node->childrens),
            ARR_LEN(node->data));
@@ -206,7 +319,7 @@ void node_jobj(FILE *fp, Node *node) {
 }
 
 int main(int argc, char **argv) {
-    BTree *tree = BTree_init(2);
+    BTree *tree = BTree_init(3);
     for (int i = 0; i < 10; i++) {
         BTree_insert(tree, i);
     }
@@ -214,5 +327,13 @@ int main(int argc, char **argv) {
     FILE *fp = fopen("data.json", "w");
     node_jobj(fp, tree->root);
     fclose(fp);
+
+    for (int i = 9; i > 0; i--) {
+        BTree_delete(tree, i);
+        printf("deleted %d\n", i);
+        BTree_dump(tree);
+        if (i == 9)
+            i = 5;
+    }
     return 0;
 }
