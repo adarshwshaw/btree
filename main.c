@@ -92,6 +92,18 @@ void *Array_init(uint itemSize, uint cap) {
     return &arr[1];
 }
 
+void Array_free(void *arr) {
+    Array_hdr *ptr = (Array_hdr *)arr;
+    free(&ptr[-1]);
+}
+
+void Node_free(Node *node) {
+    Array_free(node->data);
+    Array_free(node->childrens);
+    free(node);
+    printf("Freed a node");
+}
+
 Node *Node_init(size_t degree) {
     Node *node = calloc(1, sizeof(*node));
     node->data =
@@ -204,7 +216,25 @@ void Node_deleteFromNonLeaf(Node *node, int idx, int degree) {
     // 	assert(FALSE && "Merge Non implemented"
     //     }
 }
-void Node_merge(Node *node, int idx, size_t degree) { NOT_IMP }
+void Node_merge(Node *node, int idx, size_t degree) {
+    Node *child = node->childrens[idx];
+    Node *sibling = node->childrens[idx + 1];
+    ARRAY_INSERT(child->data, ARR_LEN(child->data), node->data[idx]);
+    for (int i = 0; i < ARR_LEN(sibling->data); i++) {
+        ARRAY_INSERT(child->data, i + degree, sibling->data[i]);
+    }
+    if (!child->isleaf) {
+        int start = ARR_LEN(child->childrens);
+        for (int i = 0; i < ARR_LEN(sibling->childrens); i++) {
+            ARRAY_INSERT(child->childrens, start + i, sibling->childrens[i]);
+        }
+    }
+    ARRAY_REMOVE(node->data, idx);
+    ARRAY_REMOVE(node->childrens, idx + 1);
+
+    // TODO: free sibling node
+    Node_free(sibling);
+}
 void Node_fill(Node *node, int idx, size_t degree) {
     // check previous or later sibling if one of them has more than degree the
     // pull one from there
@@ -221,10 +251,8 @@ void Node_fill(Node *node, int idx, size_t degree) {
         ARRAY_REMOVE(sibling->data, ARR_LEN(sibling->data) - 1);
         ARRAY_REMOVE(sibling->childrens, ARR_LEN(sibling->childrens) - 1);
 
-    }
-
-    else if (idx != ARR_LEN(node->data) &&
-             ARR_LEN(node->childrens[idx + 1]->data) >= degree) {
+    } else if (idx != ARR_LEN(node->data) &&
+               ARR_LEN(node->childrens[idx + 1]->data) >= degree) {
         Node *child = node->childrens[idx];
         Node *sibling = node->childrens[idx + 1];
 
@@ -236,7 +264,6 @@ void Node_fill(Node *node, int idx, size_t degree) {
         }
         node->data[idx] = sibling->data[0];
         ARRAY_REMOVE(sibling->data, 0);
-
     } else {
         if (idx != ARR_LEN(node->data)) {
             Node_merge(node, idx, degree);
@@ -273,6 +300,17 @@ void Node_delete(Node *node, int data, size_t degree) {
             Node_delete(node->childrens[idx - 1], data, degree);
         } else {
             Node_delete(node->childrens[idx], data, degree);
+        }
+        // if self is empty
+        if (ARR_LEN(node->data) == 0) {
+            printf("reducing the height\n");
+            Node *child = node->childrens[0];
+            Array_free(node->data);
+            Array_free(node->childrens);
+            node->childrens = child->childrens;
+            node->data = child->data;
+            node->isleaf = child->isleaf;
+            free(child);
         }
     }
 }
@@ -320,7 +358,7 @@ void node_jobj(FILE *fp, Node *node) {
 
 int main(int argc, char **argv) {
     BTree *tree = BTree_init(3);
-    for (int i = 0; i < 10; i++) {
+    for (int i = 0; i < 20; i++) {
         BTree_insert(tree, i);
     }
     BTree_dump(tree);
@@ -328,12 +366,10 @@ int main(int argc, char **argv) {
     node_jobj(fp, tree->root);
     fclose(fp);
 
-    for (int i = 9; i > 0; i--) {
+    for (int i = 19; i >= 0; i--) {
         BTree_delete(tree, i);
         printf("deleted %d\n", i);
         BTree_dump(tree);
-        if (i == 9)
-            i = 5;
     }
     return 0;
 }
